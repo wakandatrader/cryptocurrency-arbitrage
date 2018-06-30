@@ -7,7 +7,8 @@
 
 console.log('Starting app...');
 
-const request = require('request'), Promise = require("bluebird"); //request for pulling JSON from api. Bluebird for Promises.
+const Promise = require('bluebird'); // Bluebird for Promises.
+const rp = require('request-promise'); // request for pulling JSON from api.
 
 const express = require('express'),
     app = express(),
@@ -41,32 +42,47 @@ io.on('connection', function (socket) {
 let coin_prices = {}, numberOfRequests = 0, results = []; // GLOBAL variables to get pushed to browser.
 
 function getMarketData(options, coin_prices, callback) {   //GET JSON DATA
-    return new Promise(function (resolve, reject) {
-        request(options.URL, function (error, response, body) {
-            try {
-                let data = JSON.parse(body);
-                console.log("Success", options.marketName);
-                if (options.marketName) {
 
-                    let newCoinPrices = options.last(data, coin_prices, options.toBTCURL);
-                    numberOfRequests++;
-                    if (numberOfRequests >= 1) computePrices(coin_prices);
-                    resolve(newCoinPrices);
+    const fetchData = () => {
+        // fetch each coin's ticker individually
+        if (options.pairs) {
+            return Promise.map(options.pairs, (pair) => {
+                const pairUrl = options.URL.replace('{}', pair);
+                return rp(pairUrl);
+            }, { concurrency: 4 });
+        } else {
+            // use summary request ticker
+            return rp(options.URL);
+        }
+    };
 
-                }
-                else {
-                    resolve(data);
-                }
-
-            } catch (error) {
-                console.log("Error getting JSON response from", options.URL, error); //Throws error
-                reject(error);
+    return fetchData()
+        .then((response) => {
+            let data;
+            if (Array.isArray(response)) {
+                data = response.map(res => JSON.parse(res));
+            } else {
+                data = JSON.parse(response);
             }
 
-        });
+            console.log("Success", options.marketName);
+            if (options.marketName) {
 
+                let newCoinPrices = options.last(data, coin_prices, options.toBTCURL);
+                numberOfRequests++;
+                if (numberOfRequests >= 1) computePrices(coin_prices);
+                return newCoinPrices;
 
-    });
+            }
+            else {
+                return data;
+            }
+        })
+        .catch((error) => {
+            console.log("Error getting JSON response from", options.URL, error); //Throws error
+            throw error;
+        })
+        .asCallback(callback);
 }
 
 async function computePrices(data) {
@@ -118,7 +134,7 @@ async function computePrices(data) {
 
                                     }
                                 );
-                                
+
                                 // db.insert({
                                 //     coin: coin,
                                 //     lastSpread: arr[i][0] / arr[j][0],

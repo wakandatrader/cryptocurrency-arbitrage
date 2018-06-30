@@ -1,3 +1,4 @@
+const fp = require('lodash/fp');
 //
 // let boilerPlateMarket =
 // {
@@ -264,31 +265,79 @@ let markets = [
         }
         },
 
-        {
-            marketName: 'binance',
-            URL: 'https://api.binance.com/api/v3/ticker/price', //URL To Fetch API From.
-            toBTCURL: false, //URL, if needed for an external bitcoin price api.
-            last: function (data, coin_prices) { //Get the last price of coins in JSON data
-                return new Promise(function (res, rej) {
-                    try {
-                        data.forEach(pair => {
-                             if (pair.symbol.endsWith('BTC')) {
-                                 let price = pair.price;
-                                 let coinName = pair.symbol.substring(0, pair.symbol.length - 3);
-                                 if (!coin_prices[coinName]) {
-                                     coin_prices[coinName] = {};
-                                 }
-                                 coin_prices[coinName].binance = price;
-                             }
-                        });
-                        res(coin_prices);
+    {
+        marketName: 'binance',
+        URL: 'https://api.binance.com/api/v3/ticker/price', //URL To Fetch API From.
+        toBTCURL: false, //URL, if needed for an external bitcoin price api.
+        last: function (data, coin_prices) { //Get the last price of coins in JSON data
+            return new Promise(function (res, rej) {
+                try {
+                    data.forEach(pair => {
+                        if (pair.symbol.endsWith('BTC')) {
+                            let price = pair.price;
+                            let coinName = pair.symbol.substring(0, pair.symbol.length - 3);
+                            if (!coin_prices[coinName]) {
+                                coin_prices[coinName] = {};
+                            }
+                            coin_prices[coinName].binance = price;
+                        }
+                    });
+                    res(coin_prices);
                 } catch (err) {
-                     console.error(err);
-                     rej(err);
+                    console.error(err);
+                    rej(err);
                 }
             });
         }
     },
+
+    {
+        marketName: 'indodax',
+        URL: 'https://indodax.com/api/{}/ticker', //URL To Fetch API From.
+        toBTCURL: false, //URL, if needed for an external bitcoin price api.
+        pairs: [ 'bts_btc', 'drk_btc', 'doge_btc', 'eth_btc', 'ltc_btc', 'nxt_btc', 'ten_btc',
+                 'nem_btc', 'str_btc', 'xrp_btc' ],
+        last: function (data, coin_prices) { //Get the last price of coins in JSON data
+
+            function nameTransform(coinName) {
+                switch (coinName) {
+                  case 'DRK':
+                      return 'DASH';
+                  case 'STR':
+                      return 'XLM';
+                  case 'NEM':
+                      return 'XEM';
+                  default:
+                      return coinName;
+                }
+            }
+
+            return new Promise(function (res, rej) {
+
+                data.forEach(pair => {
+                    const pairName = fp.find(key => {
+                        return key.startsWith('vol_') && key !== 'vol_btc';
+                    })(Object.keys(pair.ticker));
+                    if (!pairName) {
+                        return rej(new Error('no pair name'));
+                    }
+                    let coinName = nameTransform(pairName.substring(4).toUpperCase());
+
+                    let price = pair.ticker.last;
+                    if (!coin_prices[coinName]) {
+                        coin_prices[coinName] = {};
+                    }
+                    coin_prices[coinName].indodax = price;
+                    return true;
+                });
+                return res(coin_prices);
+            }).catch((err) => {
+                console.error(err);
+                throw err;
+            });
+        }
+    },
+
 ];
 
 let marketNames = [];

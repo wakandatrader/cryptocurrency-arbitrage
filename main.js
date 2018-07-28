@@ -183,5 +183,5 @@ async function computePrices(data) {
 
     .catch(e => console.log(e));
 
-  setTimeout(main, 10000);
+  setTimeout(main, 20000);
 })();

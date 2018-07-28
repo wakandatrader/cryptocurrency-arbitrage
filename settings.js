@@ -1,3 +1,4 @@
+const Promise = require('bluebird');
 const fp = require('lodash/fp');
 //
 // let boilerPlateMarket =
@@ -117,34 +118,34 @@ let markets = [
   //     }
   // },
 
-  {
-    marketName: 'jubi',
-    URL: 'https://www.jubi.com/api/v1/allticker/', //URL To Fetch API From.
-    toBTCURL: false, //URL, if needed for an external bitcoin price api.
-    pairURL : '',
-    last: function (data, coin_prices, toBTCURL) { //Where to find the last price of coin in JSON data
-      return new Promise(function (res, rej) {
-        let priceOfBTC = data.btc.last;
-        console.log(priceOfBTC);
-        try {
-          for (let key in data) {
-            let coinName = key.toUpperCase();
-            let price = data[key].last;
-            if (!coin_prices[coinName]) coin_prices[coinName] = {};
+  // {
+  //   marketName: 'jubi',
+  //   URL: 'https://www.jubi.com/api/v1/allticker/', //URL To Fetch API From.
+  //   toBTCURL: false, //URL, if needed for an external bitcoin price api.
+  //   pairURL : '',
+  //   last: function (data, coin_prices, toBTCURL) { //Where to find the last price of coin in JSON data
+  //     return new Promise(function (res, rej) {
+  //       let priceOfBTC = data.btc.last;
+  //       console.log(priceOfBTC);
+  //       try {
+  //         for (let key in data) {
+  //           let coinName = key.toUpperCase();
+  //           let price = data[key].last;
+  //           if (!coin_prices[coinName]) coin_prices[coinName] = {};
 
-            coin_prices[coinName]["jubi"] = data[key].last / priceOfBTC;
-          }
-          res(coin_prices);
-        }
+  //           coin_prices[coinName]["jubi"] = data[key].last / priceOfBTC;
+  //         }
+  //         res(coin_prices);
+  //       }
 
-        catch (err) {
-          console.log(err);
-          rej(err)
-        }
-      })
-    }
+  //       catch (err) {
+  //         console.log(err);
+  //         rej(err)
+  //       }
+  //     })
+  //   }
 
-  },
+  // },
 
 
   {
@@ -271,6 +272,7 @@ let markets = [
     toBTCURL: false, //URL, if needed for an external bitcoin price api.
     pairURL : '',
     last: function (data, coin_prices) { //Get the last price of coins in JSON data
+      console.log(data);
       return new Promise(function (res, rej) {
         try {
           data.forEach(pair => {
@@ -293,7 +295,7 @@ let markets = [
   },
 
   {
-    marketName: 'indodax',
+    marketName: 'indodaxbtc',
     URL: 'https://indodax.com/api/{}/ticker', //URL To Fetch API From.
     toBTCURL: false, //URL, if needed for an external bitcoin price api.
     pairs: [ 'bts_btc', 'drk_btc', 'doge_btc', 'eth_btc', 'ltc_btc', 'nxt_btc', 'ten_btc',
@@ -329,7 +331,7 @@ let markets = [
           if (!coin_prices[coinName]) {
             coin_prices[coinName] = {};
           }
-          coin_prices[coinName].indodax = price;
+          coin_prices[coinName].indodaxbtc = price;
           return true;
         });
         return res(coin_prices);
@@ -340,6 +342,68 @@ let markets = [
     }
   },
 
+  // This is for IDR pair in indodax. The IDR prices are converted to BTC using IDR/BTC price at the moment
+  // So the suggestion made by this market is to buy/sell the coins to IDR
+  {
+    marketName: 'indodaxidr',
+    URL: 'https://indodax.com/api/{}/ticker', //URL To Fetch API From.
+    toBTCURL: false, //URL, if needed for an external bitcoin price api.
+    pairs: [ 'btc_idr', 'ten_idr', 'act_idr', 'ada_idr', 'bcd_idr', 'bch_idr', 'btg_idr', 'bts_idr',
+             'drk_idr', 'dax_idr', 'doge_idr', 'eth_idr', 'etc_idr', 'ignis_idr', 'gsc_idr', 'ltc_idr',
+             'stq_idr', 'nem_idr', 'nxt_idr', 'trx_idr', 'sumo_idr', 'waves_idr', 'str_idr', 'xrp_idr',
+             'xzc_idr' ],
+    pairURL : '',
+    last: function (data, coin_prices) { //Get the last price of coins in JSON data
+
+      function nameTransform(coinName) {
+        switch (coinName) {
+          case 'DRK':
+            return 'DASH';
+          case 'STR':
+            return 'XLM';
+          case 'NEM':
+            return 'XEM';
+          default:
+            return coinName;
+        }
+      }
+
+      return new Promise(function (res, rej) {
+
+        let btcPrice;
+
+        data.forEach(pair => {
+          const pairName = fp.find(key => {
+            return key.startsWith('vol_') && key !== 'vol_idr';
+          })(Object.keys(pair.ticker));
+          if (!pairName) {
+            return rej(new Error('no pair name'));
+          }
+          let coinName = nameTransform(pairName.substring(4).toUpperCase());
+
+          if (coinName === 'BTC') {
+            // save the IDR/BTC price
+            btcPrice = pair.ticker.last;
+          } else {
+            if (btcPrice) {
+              let price = pair.ticker.last;
+              if (!coin_prices[coinName]) {
+                coin_prices[coinName] = {};
+              }
+
+              // convert prices from IDR to BTC
+              coin_prices[coinName].indodaxidr = (price / btcPrice).toFixed(8);
+            }
+          }
+          return true;
+        });
+        return res(coin_prices);
+      }).catch((err) => {
+        console.error(err);
+        throw err;
+      });
+    }
+  },
 ];
 
 let marketNames = [];

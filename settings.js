@@ -272,7 +272,6 @@ let markets = [
     toBTCURL: false, //URL, if needed for an external bitcoin price api.
     pairURL : '',
     last: function (data, coin_prices) { //Get the last price of coins in JSON data
-      console.log(data);
       return new Promise(function (res, rej) {
         try {
           data.forEach(pair => {
